@@ -38,6 +38,30 @@ config PSOC_EDGE_M55_SRF_SUPPORT
 	help
 	  This option enables the SRF support on m55 core on pse84 and the infrastructure setup on m33/ns to deal with that.
 
+config PSE84_MCUBOOT_XIP_ENCRYPTION
+	bool "Encrypt MCUboot slot images for on-the-fly SMIF decryption"
+	depends on BOOTLOADER_MCUBOOT
+	help
+	  When set, the image chain-loaded by MCUboot is encrypted with
+	  imgtool --encrypt-xip (AES-128-CTR) in addition to being signed, so
+	  it stays encrypted in external flash and is decrypted on the fly by
+	  the SMIF hardware during execution. The XIP base address passed to
+	  imgtool is derived from the build's slot0 partition. The MCUboot
+	  bootloader must be built with CONFIG_BOOT_ENCRYPT_IMAGE_XIP and a
+	  mandatory ECDSA-P256 signature.
+
+config PSE84_MCUBOOT_XIP_ENC_KEY_FILE
+	string "ECIES public key file for XIP encryption"
+	depends on PSE84_MCUBOOT_XIP_ENCRYPTION
+	default "enc-ec256-pub.pem"
+	help
+	  Path to the EC256 public key imgtool uses to wrap the per-image AES
+	  key (ECIES-P256). It must match the private key the bootloader uses
+	  (CONFIG_BOOT_ENCRYPTION_KEY_FILE). An absolute path is used as-is;
+	  a relative path is searched in APPLICATION_CONFIG_DIR, then the west
+	  topdir.
+
+
 if SOC_SERIES_PSE84_M33
 
 config SOC_PSE84_M55_ENABLE

@@ -76,6 +76,10 @@ endif()
 zephyr_sources_ifdef(CONFIG_SOC_PSE84_LPM_TIMER ${ZEPHYR_BASE}/soc/infineon/common/lpm_timer.c)
 zephyr_sources_ifdef(CONFIG_POWEROFF poweroff.c)
 
+# MCUboot XIP (SMIF) encryption boot hook. CONFIG_BOOT_ENCRYPT_IMAGE_XIP is an
+# MCUboot Kconfig, so this only compiles into the MCUboot bootloader image.
+zephyr_sources_ifdef(CONFIG_BOOT_ENCRYPT_IMAGE_XIP pse84_mcuboot_xip.c)
+
 zephyr_include_directories(.)
 
 if(${ZEPHYR_TOOLCHAIN_VARIANT} STREQUAL "armclang")

@@ -136,13 +136,73 @@ function(pse84_sign_tfm INPUT_FILE OUTPUT_FILE SLOT_LABEL)
     set(hex_addr ${part_addr})
   endif()
 
+  # When XIP encryption is enabled, encrypt the SPE against its own slot's XIP
+  # address so it stays encrypted in external flash. The signature still covers
+  # the ciphertext (imgtool encrypts before signing).
+  pse84_xip_encrypt_args("${SLOT_LABEL}" xip_enc_args)
+
   set_property(GLOBAL APPEND PROPERTY extra_post_build_commands
     COMMAND ${PYTHON_EXECUTABLE} ${IMGTOOL} sign
       --version ${CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION}
       --header-size ${CONFIG_ROM_START_OFFSET} --pad-header
-      --slot-size ${slot_size} ${align_args} ${key_args}
+      --slot-size ${slot_size} ${align_args} ${key_args} ${xip_enc_args}
       --hex-addr ${hex_addr}
       ${INPUT_FILE} ${OUTPUT_FILE}
   )
   set_property(GLOBAL APPEND PROPERTY extra_post_build_byproducts ${OUTPUT_FILE})
+endfunction()
+
+# Returns imgtool --encrypt-xip arguments for on-the-fly SMIF decryption in
+# OUT_VAR, or an empty string when CONFIG_PSE84_MCUBOOT_XIP_ENCRYPTION is not
+# set. The XIP base address is the raw (execution) address of SLOT_LABEL, which
+# is what the SMIF uses as the AES-CTR anchor during execution.
+#
+# Usage: pse84_xip_encrypt_args(<slot_nodelabel> <out_var>)
+function(pse84_xip_encrypt_args SLOT_LABEL OUT_VAR)
+  set(${OUT_VAR} "" PARENT_SCOPE)
+
+  if(NOT CONFIG_PSE84_MCUBOOT_XIP_ENCRYPTION)
+    return()
+  endif()
+
+  set(enckey "${CONFIG_PSE84_MCUBOOT_XIP_ENC_KEY_FILE}")
+  string(CONFIGURE "${enckey}" enckey)
+  if("${enckey}" STREQUAL "")
+    message(FATAL_ERROR
+      "CONFIG_PSE84_MCUBOOT_XIP_ENCRYPTION is set but "
+      "CONFIG_PSE84_MCUBOOT_XIP_ENC_KEY_FILE is empty.")
+  endif()
+  if(NOT IS_ABSOLUTE "${enckey}")
+    if(EXISTS "${APPLICATION_CONFIG_DIR}/${enckey}")
+      set(enckey "${APPLICATION_CONFIG_DIR}/${enckey}")
+    elseif(WEST_TOPDIR)
+      set(enckey "${WEST_TOPDIR}/${enckey}")
+    endif()
+  endif()
+  if(NOT EXISTS "${enckey}")
+    message(FATAL_ERROR "XIP encryption key not found: ${enckey}")
+  endif()
+
+  dt_nodelabel(part_node NODELABEL "${SLOT_LABEL}" REQUIRED)
+  dt_reg_addr(xip_base PATH ${part_node})
+
+  # The SMIF crypto engine forms the AES-CTR counter from the SBUS XIP address
+  # of the fetch, not the CBUS execution alias the partition node uses. The SBUS
+  # base is a fixed offset above the CBUS base for both security states (secure
+  # CY_XIP_PORT0_BASE 0x70000000 - CY_XIP_PORT0_CBUS_BASE 0x18000000 and
+  # non-secure 0x60000000 - 0x08000000 both equal 0x58000000), so the same
+  # translation anchors a secure slot (e.g. the TF-M SPE) and a non-secure slot
+  # (e.g. the NSPE) correctly, independent of this build's security context.
+  #
+  # A slot whose node already lives in the SAHB/SBUS address space (top nibble
+  # 0x6 or 0x7, e.g. the CM55 slot in flash0_sahb) is its own anchor, so the
+  # CBUS->SBUS translation must not be applied to it.
+  math(EXPR xip_top_nibble "(${xip_base} >> 28) & 0xF")
+  if(xip_top_nibble LESS 6)
+    math(EXPR xip_base "${xip_base} + 0x58000000" OUTPUT_FORMAT HEXADECIMAL)
+  endif()
+
+  set(${OUT_VAR}
+      --encrypt-xip "${enckey}" --xip-base-address ${xip_base}
+      PARENT_SCOPE)
 endfunction()

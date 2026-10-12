@@ -107,6 +107,19 @@ if(CONFIG_BUILD_WITH_TFM AND NOT CONFIG_TFM_BL2)
 endif()
 
 # --------------------------------------------------------------------------
+# XIP (SMIF) encryption for chain-loaded, non-TF-M slot apps.
+# --------------------------------------------------------------------------
+# A standalone Secure CM33 app or a CM55 app chain-loaded by MCUboot is signed
+# by the stock cmake/mcuboot.cmake flow. When XIP encryption is enabled, wrap
+# that flow with pse84_xip_signing.cmake so the image is also encrypted against
+# its slot0 XIP address. The TF-M build path (above) handles the NSPE itself.
+if(CONFIG_PSE84_MCUBOOT_XIP_ENCRYPTION AND CONFIG_BOOTLOADER_MCUBOOT
+   AND NOT CONFIG_MCUBOOT AND NOT CONFIG_BUILD_WITH_TFM)
+  set_target_properties(zephyr_property_target PROPERTIES
+    SIGNING_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/pse84_xip_signing.cmake)
+endif()
+
+# --------------------------------------------------------------------------
 # Standalone secure image: prepend the ext-boot header with imgtool.
 # --------------------------------------------------------------------------
 # The PSE84 boot ROM always validates an ext-boot header on the first image

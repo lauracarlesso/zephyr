@@ -22,7 +22,12 @@
 
 # Step 1: stock MCUboot signing (slot geometry comes from slot0/slot1
 # partitions, which the Non-Secure devicetree points at the NS slots).
-include(${ZEPHYR_BASE}/cmake/mcuboot.cmake)
+#
+# This is the same stock-signing-plus-optional-XIP-encryption flow the
+# chain-loaded slot apps use, so reuse that wrapper (which injects the
+# imgtool --encrypt-xip args for slot0 and includes cmake/mcuboot.cmake)
+# instead of duplicating it here.
+include(${CMAKE_CURRENT_LIST_DIR}/pse84_xip_signing.cmake)
 
 # Step 2: merge the signed SPE with the signed NSPE. The SoC CMakeLists
 # deferred this merge to here so that zephyr.signed.hex (produced above)
